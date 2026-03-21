@@ -5,8 +5,8 @@ Requires=opencode-server.service
 
 [Service]
 Type=simple
-WorkingDirectory=/home/pavle/dev/clawcode
-EnvironmentFile=/home/pavle/dev/clawcode/.env
+WorkingDirectory={{WORKDIR}}
+EnvironmentFile={{WORKDIR}}/.env
 ExecStartPre=/usr/bin/curl -sf --retry 30 --retry-delay 1 --retry-connrefused http://127.0.0.1:4096/session
 ExecStart=/usr/bin/bun run src/main.ts
 Restart=on-failure

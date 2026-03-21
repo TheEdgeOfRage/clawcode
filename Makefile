@@ -5,7 +5,9 @@ SERVICES = opencode-server.service clawcode-bridge.service
 
 install:
 	mkdir -p $(SYSTEMD_DIR)
-	cp $(SERVICES) $(SYSTEMD_DIR)/
+	for svc in $(SERVICES); do \
+		sed 's|{{WORKDIR}}|$(CURDIR)|g' $$svc > $(SYSTEMD_DIR)/$$svc; \
+	done
 	systemctl --user daemon-reload
 
 uninstall:

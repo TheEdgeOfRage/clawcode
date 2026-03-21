@@ -4,7 +4,7 @@ After=network.target
 
 [Service]
 Type=simple
-WorkingDirectory=/home/pavle/dev/clawcode
+WorkingDirectory={{WORKDIR}}
 ExecStart=/usr/bin/opencode serve --port 4096
 Restart=on-failure
 RestartSec=3

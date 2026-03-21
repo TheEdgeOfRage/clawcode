@@ -33,5 +33,14 @@ function shutdown(signal: string) {
 process.on("SIGINT", () => shutdown("SIGINT"));
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 
+await bot.api.setMyCommands([
+  { command: "start", description: "Welcome message" },
+  { command: "new", description: "New session" },
+  { command: "sessions", description: "List and switch sessions" },
+  { command: "abort", description: "Abort current session" },
+  { command: "autoapprove", description: "Toggle auto-approve (on|off)" },
+  { command: "history", description: "Recent messages from current session" },
+]);
+
 console.log("telegram bot starting long-polling...");
 bot.start();

@@ -15,6 +15,7 @@ interface SessionHandler {
   onDone: DoneHandler;
   onPermission?: PermissionHandler;
   parts: Map<string, Part>;
+  assistantMessageIDs: Set<string>;
 }
 
 const handlers = new Map<string, SessionHandler>();
@@ -26,7 +27,7 @@ export function registerSession(
   onDone: DoneHandler,
   onPermission?: PermissionHandler,
 ): void {
-  handlers.set(sessionId, { onPart, onError, onDone, onPermission, parts: new Map() });
+  handlers.set(sessionId, { onPart, onError, onDone, onPermission, parts: new Map(), assistantMessageIDs: new Set() });
 }
 
 export function unregisterSession(sessionId: string): void {
@@ -39,10 +40,19 @@ export function isSessionRegistered(sessionId: string): boolean {
 
 function handleEvent(event: Event): void {
   switch (event.type) {
+    case "message.updated": {
+      const info = event.properties.info;
+      if (info.role !== "assistant") return;
+      const handler = handlers.get(info.sessionID);
+      if (!handler) return;
+      handler.assistantMessageIDs.add(info.id);
+      break;
+    }
     case "message.part.updated": {
       const part = event.properties.part;
       const handler = handlers.get(part.sessionID);
       if (!handler) return;
+      if (!handler.assistantMessageIDs.has(part.messageID)) return;
       handler.parts.set(part.id, part);
       handler.onPart(Array.from(handler.parts.values()));
       break;

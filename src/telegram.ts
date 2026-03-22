@@ -271,11 +271,12 @@ export function createBot(token: string, allowedUsers: number[]): Bot {
       return;
     }
     pendingPerms.delete(key!);
-    const permResponse = action === "a" ? "once" : "reject";
+    const responseMap: Record<string, "once" | "always" | "reject"> = { a: "once", s: "always", d: "reject" };
+    const permResponse = responseMap[action] ?? "reject";
     try {
       await replyPermission(perm.sessionId, perm.permissionId, permResponse);
       console.log(`[permission] ${permResponse} session=${perm.sessionId} perm=${perm.permissionId}`);
-      await ctx.answerCallbackQuery({ text: `Permission ${action === "a" ? "granted" : "denied"}` });
+      await ctx.answerCallbackQuery({ text: `Permission: ${permResponse}` });
       await ctx.deleteMessage();
     } catch (err) {
       console.error(`[permission] reply error:`, err);
@@ -362,6 +363,7 @@ export function createBot(token: string, allowedUsers: number[]): Bot {
           pendingPerms.set(key, { sessionId: perm.sessionID, permissionId: perm.id });
           const keyboard = new InlineKeyboard()
             .text("Allow", `p:a:${key}`)
+            .text("Session", `p:s:${key}`)
             .text("Deny", `p:d:${key}`);
           await ctx.api.sendMessage(chatId, formatPermissionMessage(perm), {
             parse_mode: "MarkdownV2",

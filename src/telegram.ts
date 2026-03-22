@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { Bot, InlineKeyboard, type Context } from "grammy";
 import type { Part, Permission } from "@opencode-ai/sdk/client";
 import { escapeMarkdownV2, formatParts, splitMessage } from "./format.js";
@@ -72,6 +73,32 @@ export function createBot(token: string, allowedUsers: number[]): Bot {
       return;
     }
     await next();
+  });
+
+  bot.command("start_llama", async (ctx) => {
+    try {
+      const proc = spawnSync("systemctl", ["--user", "start", "llama"]);
+      if (proc.status === 0) {
+        await ctx.reply("llama started\\.", { parse_mode: "MarkdownV2" });
+      } else {
+        await ctx.reply(`Failed to start llama: ${proc.stderr?.toString().trim()}`);
+      }
+    } catch (err) {
+      await ctx.reply(`Error: ${String(err)}`);
+    }
+  });
+
+  bot.command("stop_llama", async (ctx) => {
+    try {
+      const proc = spawnSync("systemctl", ["--user", "stop", "llama"]);
+      if (proc.status === 0) {
+        await ctx.reply("llama stopped\\.", { parse_mode: "MarkdownV2" });
+      } else {
+        await ctx.reply(`Failed to stop llama: ${proc.stderr?.toString().trim()}`);
+      }
+    } catch (err) {
+      await ctx.reply(`Error: ${String(err)}`);
+    }
   });
 
   bot.command("start", async (ctx) => {

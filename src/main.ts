@@ -40,6 +40,8 @@ await bot.api.setMyCommands([
   { command: "abort", description: "Abort current session" },
   { command: "autoapprove", description: "Toggle auto-approve (on|off)" },
   { command: "history", description: "Recent messages from current session" },
+  { command: "start_llama", description: "Start llama service" },
+  { command: "stop_llama", description: "Stop llama service" },
 ]);
 
 console.log("telegram bot starting long-polling...");

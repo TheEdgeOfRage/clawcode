@@ -40,6 +40,8 @@ make uninstall
 | `/abort` | Abort current session |
 | `/autoapprove on\|off` | Toggle auto-approve for permissions |
 | `/history` | Recent messages from current session |
+| `/start_llama` | Start llama systemd service |
+| `/stop_llama` | Stop llama systemd service |
 
 Send any text message to prompt OpenCode. Responses stream in real-time.
 Permission requests appear as inline keyboards.

@@ -1,22 +1,28 @@
-import { createOpencodeClient, type Event, type Part, type Permission } from "@opencode-ai/sdk/client";
+import { createOpencodeClient, type Event, type EventMessageUpdated, type EventMessagePartUpdated, type Part } from "@opencode-ai/sdk/client";
 
 const OPENCODE_URL = process.env.OPENCODE_URL || "http://127.0.0.1:4096";
 
 const sseClient = createOpencodeClient({ baseUrl: OPENCODE_URL });
 
+// Actual shape from the server (differs from SDK's Permission type)
+export interface PermissionEvent {
+  id: string;
+  sessionID: string;
+  permission: string;
+  patterns: string[];
+  metadata: Record<string, unknown>;
+  always?: string[];
+  tool?: { messageID: string; callID: string };
+}
+
 export type PartHandler = (parts: Part[]) => void;
-export type ErrorHandler = (error: string) => void;
-export type DoneHandler = (parts: Part[]) => void;
-export type PermissionHandler = (permission: Permission) => void;
+export type PermissionHandler = (perm: PermissionEvent) => void;
 
 interface SessionHandler {
   onPart: PartHandler;
-  onError: ErrorHandler;
-  onDone: DoneHandler;
-  onPermission?: PermissionHandler;
+  onPermission: PermissionHandler;
   parts: Map<string, Part>;
   assistantMessageIDs: Set<string>;
-  pendingPermissions: Set<string>;
 }
 
 const handlers = new Map<string, SessionHandler>();
@@ -24,97 +30,49 @@ const handlers = new Map<string, SessionHandler>();
 export function registerSession(
   sessionId: string,
   onPart: PartHandler,
-  onError: ErrorHandler,
-  onDone: DoneHandler,
-  onPermission?: PermissionHandler,
+  onPermission: PermissionHandler,
 ): void {
-  handlers.set(sessionId, { onPart, onError, onDone, onPermission, parts: new Map(), assistantMessageIDs: new Set(), pendingPermissions: new Set() });
+  handlers.set(sessionId, { onPart, onPermission, parts: new Map(), assistantMessageIDs: new Set() });
 }
 
 export function unregisterSession(sessionId: string): void {
   handlers.delete(sessionId);
 }
 
-export function isSessionRegistered(sessionId: string): boolean {
-  return handlers.has(sessionId);
-}
-
 function handleEvent(event: Event): void {
-  switch (event.type) {
-    case "message.updated": {
-      const info = event.properties.info;
-      if (info.role !== "assistant") return;
-      const handler = handlers.get(info.sessionID);
-      if (!handler) return;
-      handler.assistantMessageIDs.add(info.id);
-      break;
-    }
-    case "message.part.updated": {
-      const part = event.properties.part;
-      const handler = handlers.get(part.sessionID);
-      if (!handler) return;
-      if (!handler.assistantMessageIDs.has(part.messageID)) return;
-      handler.parts.set(part.id, part);
-      handler.onPart(Array.from(handler.parts.values()));
-      break;
-    }
-    case "session.error": {
-      const sessionId = event.properties.sessionID;
-      if (!sessionId) return;
-      const handler = handlers.get(sessionId);
-      if (!handler) return;
-      const err = event.properties.error;
-      const errMsg = err
-        ? ("message" in err.data
-            ? String(err.data.message)
-            : err.name)
-        : "Unknown error";
-      console.error(`[events] session.error session=${sessionId}: ${errMsg}`);
-      handler.onError(String(errMsg));
-      handlers.delete(sessionId);
-      break;
-    }
-    case "session.idle": {
-      const sessionId = event.properties.sessionID;
-      const handler = handlers.get(sessionId);
-      if (!handler) return;
-      if (handler.pendingPermissions.size > 0) {
-        console.log(`[events] session.idle session=${sessionId} (skipped, ${handler.pendingPermissions.size} pending permissions)`);
-        return;
-      }
-      console.log(`[events] session.idle session=${sessionId} parts=${handler.parts.size}`);
-      handler.onDone(Array.from(handler.parts.values()));
-      handlers.delete(sessionId);
-      break;
-    }
-    case "permission.updated": {
-      const permission = event.properties;
-      console.log(`[events] permission.updated session=${permission.sessionID} perm=${permission.id} type=${permission.type}`);
-      const handler = handlers.get(permission.sessionID);
-      if (!handler) {
-        console.log(`[events] no handler registered for session=${permission.sessionID}`);
-        return;
-      }
-      handler.pendingPermissions.add(permission.id);
-      if (handler.onPermission) {
-        handler.onPermission(permission);
-      }
-      break;
-    }
-    case "permission.replied": {
-      const { sessionID, permissionID } = event.properties;
-      const handler = handlers.get(sessionID);
-      if (!handler) return;
-      handler.pendingPermissions.delete(permissionID);
-      console.log(`[events] permission.replied session=${sessionID} perm=${permissionID} remaining=${handler.pendingPermissions.size}`);
-      break;
-    }
+  const type = event.type as string;
+
+  if (type === "message.updated") {
+    const info = (event as EventMessageUpdated).properties.info;
+    if (info.role !== "assistant") return;
+    const handler = handlers.get(info.sessionID);
+    if (!handler) return;
+    handler.assistantMessageIDs.add(info.id);
+    return;
+  }
+
+  if (type === "message.part.updated") {
+    const part = (event as EventMessagePartUpdated).properties.part;
+    const handler = handlers.get(part.sessionID);
+    if (!handler) return;
+    if (!handler.assistantMessageIDs.has(part.messageID)) return;
+    handler.parts.set(part.id, part);
+    handler.onPart(Array.from(handler.parts.values()));
+    return;
+  }
+
+  if (type === "permission.asked" || type === "permission.updated") {
+    const perm = event.properties as unknown as PermissionEvent;
+    console.log(`[events] ${type} session=${perm.sessionID} perm=${perm.id} permission=${perm.permission}`);
+    const handler = handlers.get(perm.sessionID);
+    if (!handler) return;
+    handler.onPermission(perm);
+    return;
   }
 }
 
 export async function subscribeEvents(): Promise<void> {
   const { stream } = await sseClient.event.subscribe();
-  // Run event loop in background — never awaited to completion
   void (async () => {
     for await (const event of stream) {
       try {

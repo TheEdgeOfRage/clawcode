@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { Bot, InlineKeyboard, type Context } from "grammy";
-import type { Part, Permission } from "@opencode-ai/sdk/client";
+import type { Part } from "@opencode-ai/sdk/client";
+import type { PermissionEvent } from "./events.js";
 import { escapeMarkdownV2, formatParts, splitMessage } from "./format.js";
 import {
   getOrCreateSession,
@@ -15,9 +16,14 @@ import {
   setAutoApprove,
   isAutoApprove,
 } from "./opencode.js";
-import { registerSession, unregisterSession, isSessionRegistered } from "./events.js";
+import { registerSession, unregisterSession } from "./events.js";
 
 const THROTTLE_MS = 2000;
+
+// Telegram callback data is limited to 64 bytes. Permission IDs are too long,
+// so we store them in a map keyed by a short incrementing counter.
+let permCounter = 0;
+const pendingPerms = new Map<string, { sessionId: string; permissionId: string }>();
 
 function formatPartsPreview(parts: Part[]): string {
   const text = formatParts(parts);
@@ -41,21 +47,10 @@ async function editMessage(
   }
 }
 
-function formatPermissionMessage(perm: Permission): string {
-  const lines = [
-    escapeMarkdownV2(`Permission request: ${perm.type}`),
-    escapeMarkdownV2(`Title: ${perm.title}`),
-  ];
-  if (perm.pattern) {
-    const patterns = Array.isArray(perm.pattern) ? perm.pattern.join(", ") : perm.pattern;
-    lines.push(escapeMarkdownV2(`Pattern: ${patterns}`));
-  }
-  const metaEntries = Object.entries(perm.metadata);
-  if (metaEntries.length > 0) {
-    const meta = metaEntries
-      .map(([k, v]) => `${k}: ${String(v)}`)
-      .join(", ");
-    lines.push(escapeMarkdownV2(`Metadata: ${meta}`));
+function formatPermissionMessage(perm: PermissionEvent): string {
+  const lines = [escapeMarkdownV2(`Permission: ${perm.permission}`)];
+  if (perm.patterns.length > 0) {
+    lines.push(escapeMarkdownV2(perm.patterns.join("\n")));
   }
   return lines.join("\n");
 }
@@ -264,24 +259,26 @@ export function createBot(token: string, allowedUsers: number[]): Bot {
       return;
     }
 
-    if (!data.startsWith("perm:")) {
+    // Format: p:<allow|deny>:<key>
+    if (!data.startsWith("p:")) {
       await ctx.answerCallbackQuery();
       return;
     }
-    // Format: perm:<response>:<sessionId>:<permissionId>
-    const [, response, sessionId, permissionId] = data.split(":");
-    if (!response || !sessionId || !permissionId) {
-      await ctx.answerCallbackQuery({ text: "Invalid permission data" });
+    const [, action, key] = data.split(":");
+    const perm = key ? pendingPerms.get(key) : undefined;
+    if (!action || !perm) {
+      await ctx.answerCallbackQuery({ text: "Permission expired" });
       return;
     }
-    const permResponse = response === "allow" ? "once" : "reject";
+    pendingPerms.delete(key!);
+    const permResponse = action === "a" ? "once" : "reject";
     try {
-      await replyPermission(sessionId, permissionId, permResponse);
-      console.log(`[permission] ${permResponse} session=${sessionId} perm=${permissionId}`);
-      await ctx.answerCallbackQuery({ text: `Permission ${response === "allow" ? "granted" : "denied"}` });
-      await ctx.editMessageReplyMarkup({ reply_markup: undefined });
+      await replyPermission(perm.sessionId, perm.permissionId, permResponse);
+      console.log(`[permission] ${permResponse} session=${perm.sessionId} perm=${perm.permissionId}`);
+      await ctx.answerCallbackQuery({ text: `Permission ${action === "a" ? "granted" : "denied"}` });
+      await ctx.deleteMessage();
     } catch (err) {
-      console.error(`[permission] reply error session=${sessionId}:`, err);
+      console.error(`[permission] reply error:`, err);
       await ctx.answerCallbackQuery({ text: `Error: ${String(err)}` });
     }
   });
@@ -300,23 +297,24 @@ export function createBot(token: string, allowedUsers: number[]): Bot {
         );
       }
 
-      // Send typing status, refreshed every 4s until done
+      // Typing indicator, refreshed every 4s
       let typingInterval: ReturnType<typeof setInterval> | null = setInterval(() => {
         void ctx.api.sendChatAction(chatId, "typing");
       }, 4000);
       void ctx.api.sendChatAction(chatId, "typing");
 
-      const stopTyping = () => {
-        if (typingInterval) {
-          clearInterval(typingInterval);
-          typingInterval = null;
-        }
-      };
-
+      // Streaming state
       let responseMsgId: number | null = null;
+      let sendingFirst = false;
       let lastEditTime = 0;
       let editTimer: ReturnType<typeof setTimeout> | null = null;
       let latestPreview = "";
+
+      const cleanup = () => {
+        if (editTimer) { clearTimeout(editTimer); editTimer = null; }
+        if (typingInterval) { clearInterval(typingInterval); typingInterval = null; }
+        unregisterSession(sessionId);
+      };
 
       const flushEdit = () => {
         if (latestPreview && responseMsgId !== null) {
@@ -325,27 +323,21 @@ export function createBot(token: string, allowedUsers: number[]): Bot {
         }
       };
 
-      console.log(`[prompt] sending to session=${sessionId}`);
-      // Fire prompt (non-blocking — events will stream in)
-      const promptDone = sendPrompt(sessionId, ctx.message.text);
-
+      // Register SSE handlers for streaming and permissions before firing prompt
       registerSession(
         sessionId,
-        // onPart — send first message on first data, then throttled edit-in-place
+        // onPart — send first message on first data, then throttled edits
         (parts: Part[]) => {
           latestPreview = formatPartsPreview(parts);
           if (responseMsgId === null) {
-            // Send first message and capture ID for future edits
+            if (sendingFirst) return;
+            sendingFirst = true;
             void ctx.api.sendMessage(chatId, latestPreview, { parse_mode: "MarkdownV2" })
-              .then((msg) => {
-                responseMsgId = msg.message_id;
-                lastEditTime = Date.now();
-              })
+              .then((msg) => { responseMsgId = msg.message_id; lastEditTime = Date.now(); })
               .catch((err) => console.error(`[prompt] failed to send first message:`, err));
             return;
           }
-          const now = Date.now();
-          const elapsed = now - lastEditTime;
+          const elapsed = Date.now() - lastEditTime;
           if (elapsed >= THROTTLE_MS) {
             if (editTimer) clearTimeout(editTimer);
             editTimer = null;
@@ -354,81 +346,55 @@ export function createBot(token: string, allowedUsers: number[]): Bot {
             editTimer = setTimeout(flushEdit, THROTTLE_MS - elapsed);
           }
         },
-        // onError
-        async (error: string) => {
-          if (editTimer) clearTimeout(editTimer);
-          stopTyping();
-          console.error(`[prompt] error session=${sessionId}: ${error}`);
-          const errText = escapeMarkdownV2(`Error: ${error}`);
-          if (responseMsgId !== null) {
-            await editMessage(ctx, responseMsgId, errText);
-          } else {
-            await ctx.api.sendMessage(chatId, errText, { parse_mode: "MarkdownV2" });
-          }
-        },
-        // onDone
-        async (parts: Part[]) => {
-          if (editTimer) clearTimeout(editTimer);
-          stopTyping();
-          console.log(`[prompt] done session=${sessionId} parts=${parts.length}`);
-          // Final message: format and split
-          const formatted = formatParts(parts);
-          const chunks = splitMessage(formatted || escapeMarkdownV2("(empty response)"));
-
-          if (responseMsgId !== null) {
-            // Replace streaming message with first chunk
-            await editMessage(ctx, responseMsgId, chunks[0]!);
-          } else {
-            // No streaming message was sent yet (e.g. very fast response)
-            const msg = await ctx.api.sendMessage(chatId, chunks[0]!, { parse_mode: "MarkdownV2" });
-            responseMsgId = msg.message_id;
-          }
-
-          // Send remaining chunks as new messages
-          for (let i = 1; i < chunks.length; i++) {
-            await ctx.reply(chunks[i]!, { parse_mode: "MarkdownV2" });
-          }
-        },
         // onPermission
-        async (perm: Permission) => {
-          console.log(`[permission] request type=${perm.type} session=${perm.sessionID} perm=${perm.id}`);
+        async (perm: PermissionEvent) => {
+          console.log(`[permission] request permission=${perm.permission} session=${perm.sessionID} perm=${perm.id}`);
           if (isAutoApprove(perm.sessionID)) {
             console.log(`[permission] auto-approving perm=${perm.id}`);
             await replyPermission(perm.sessionID, perm.id, "once");
-            await ctx.reply(
-              escapeMarkdownV2(`Auto-approved: ${perm.title}`),
+            await ctx.api.sendMessage(chatId,
+              escapeMarkdownV2(`Auto-approved: ${perm.permission} ${perm.patterns.join(", ")}`),
               { parse_mode: "MarkdownV2" },
             );
             return;
           }
+          const key = String(++permCounter);
+          pendingPerms.set(key, { sessionId: perm.sessionID, permissionId: perm.id });
           const keyboard = new InlineKeyboard()
-            .text("Allow", `perm:allow:${perm.sessionID}:${perm.id}`)
-            .text("Deny", `perm:deny:${perm.sessionID}:${perm.id}`);
-          await ctx.reply(formatPermissionMessage(perm), {
+            .text("Allow", `p:a:${key}`)
+            .text("Deny", `p:d:${key}`);
+          await ctx.api.sendMessage(chatId, formatPermissionMessage(perm), {
             parse_mode: "MarkdownV2",
             reply_markup: keyboard,
           });
         },
       );
 
-      // Await prompt completion as fallback (in case SSE events don't fire session.idle)
-      try {
-        await promptDone;
-      } catch (err) {
-        // If prompt itself throws and no SSE error was received, clean up
-        if (isSessionRegistered(sessionId)) {
-          unregisterSession(sessionId);
-          if (editTimer) clearTimeout(editTimer);
-          stopTyping();
-          console.error(`[prompt] fallback error session=${sessionId}:`, err);
+      // Fire prompt without blocking grammY's update loop (permissions need callback handling)
+      console.log(`[prompt] sending to session=${sessionId}`);
+      sendPrompt(sessionId, ctx.message.text)
+        .then(async (chunks) => {
+          cleanup();
+          console.log(`[prompt] done session=${sessionId} chunks=${chunks.length}`);
+          if (responseMsgId !== null) {
+            await editMessage(ctx, responseMsgId, chunks[0]!);
+          } else {
+            await ctx.api.sendMessage(chatId, chunks[0]!, { parse_mode: "MarkdownV2" });
+          }
+          for (let i = 1; i < chunks.length; i++) {
+            await ctx.api.sendMessage(chatId, chunks[i]!, { parse_mode: "MarkdownV2" });
+          }
+        })
+        .catch(async (err) => {
+          cleanup();
+          console.error(`[prompt] error session=${sessionId}:`, err);
           const errText = escapeMarkdownV2(`Error: ${String(err)}`);
           if (responseMsgId !== null) {
             await editMessage(ctx, responseMsgId, errText);
           } else {
             await ctx.api.sendMessage(chatId, errText, { parse_mode: "MarkdownV2" });
           }
-        }
-      }
+        });
     } catch (err) {
       console.error(`[prompt] unhandled error chat=${chatId}:`, err);
       await ctx.reply(`Error: ${String(err)}`);

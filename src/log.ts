@@ -2,7 +2,7 @@ import { createWriteStream, mkdirSync, type WriteStream } from "fs";
 import { join } from "path";
 import { homedir } from "os";
 
-const LOG_DIR = join(homedir(), ".local", "share", "codeclaw", "log");
+const LOG_DIR = join(homedir(), ".local", "share", "clawcode", "log");
 
 let stream: WriteStream;
 
@@ -10,7 +10,9 @@ function getStream(): WriteStream {
   if (!stream) {
     mkdirSync(LOG_DIR, { recursive: true });
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    stream = createWriteStream(join(LOG_DIR, `${timestamp}.log`), { flags: "a" });
+    stream = createWriteStream(join(LOG_DIR, `${timestamp}.log`), {
+      flags: "a",
+    });
   }
   return stream;
 }
@@ -25,6 +27,9 @@ export function info(msg: string): void {
 }
 
 export function error(msg: string, err?: unknown): void {
-  const suffix = err !== undefined ? ` ${err instanceof Error ? err.stack ?? err.message : String(err)}` : "";
+  const suffix =
+    err !== undefined
+      ? ` ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`
+      : "";
   write("ERROR", msg + suffix);
 }

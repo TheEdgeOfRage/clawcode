@@ -14,7 +14,7 @@ install: install-plugin install-skills
 
 install-plugin:
 	mkdir -p $(SERVER_WORKDIR)/.opencode/plugins
-	ln -sf $(CURDIR)/src/main.ts $(SERVER_WORKDIR)/.opencode/plugins/codeclaw.ts
+	ln -sf $(CURDIR)/src/main.ts $(SERVER_WORKDIR)/.opencode/plugins/clawcode.ts
 
 install-skills:
 	@for skill in $(SKILLS); do \
@@ -26,7 +26,7 @@ install-skills:
 uninstall:
 	systemctl --user disable --now $(SERVICES) 2>/dev/null || true
 	rm -f $(addprefix $(SYSTEMD_DIR)/,$(SERVICES))
-	rm -f $(SERVER_WORKDIR)/.opencode/plugins/codeclaw.ts
+	rm -f $(SERVER_WORKDIR)/.opencode/plugins/clawcode.ts
 	systemctl --user daemon-reload
 
 lint:

@@ -23,7 +23,7 @@ Symlink the plugin into your OpenCode workspace:
 
 ```bash
 mkdir -p /path/to/workspace/.opencode/plugins
-ln -s /path/to/codeclaw/src/main.ts /path/to/workspace/.opencode/plugins/codeclaw.ts
+ln -s /path/to/clawcode/src/main.ts /path/to/workspace/.opencode/plugins/clawcode.ts
 ```
 
 Or use the Makefile to install the systemd service and skills:

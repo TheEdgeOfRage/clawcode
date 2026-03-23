@@ -17,6 +17,7 @@ import {
   isAutoApprove,
 } from "./opencode.js";
 import { registerSession, unregisterSession } from "./events.js";
+import { saveExchange } from "./memory.js";
 
 const THROTTLE_MS = 2000;
 
@@ -284,6 +285,33 @@ export function createBot(token: string, allowedUsers: number[]): Bot {
     }
   });
 
+  bot.command("remember", async (ctx) => {
+    const chatId = ctx.chat.id;
+    const text = ctx.match?.trim();
+    console.log(`[cmd] /remember chat=${chatId}`);
+    if (!text) {
+      await ctx.reply("Usage: /remember \\<what to remember\\>", { parse_mode: "MarkdownV2" });
+      return;
+    }
+    try {
+      const { sessionId } = await getOrCreateSession(chatId);
+      const prompt = `Use the remember skill to save this memory: ${text}`;
+      sendPrompt(sessionId, prompt)
+        .then(async (chunks) => {
+          for (const chunk of chunks) {
+            await ctx.api.sendMessage(chatId, chunk, { parse_mode: "MarkdownV2" });
+          }
+        })
+        .catch(async (err) => {
+          console.error(`[remember] error:`, err);
+          await ctx.reply(escapeMarkdownV2(`Error: ${String(err)}`), { parse_mode: "MarkdownV2" });
+        });
+    } catch (err) {
+      console.error(`[cmd] /remember error:`, err);
+      await ctx.reply(`Error: ${String(err)}`);
+    }
+  });
+
   // Text message handler — forward to OpenCode with streaming
   bot.on("message:text", async (ctx) => {
     const chatId = ctx.chat.id;
@@ -373,8 +401,9 @@ export function createBot(token: string, allowedUsers: number[]): Bot {
       );
 
       // Fire prompt without blocking grammY's update loop (permissions need callback handling)
+      const userText = ctx.message.text;
       console.log(`[prompt] sending to session=${sessionId}`);
-      sendPrompt(sessionId, ctx.message.text)
+      sendPrompt(sessionId, userText)
         .then(async (chunks) => {
           cleanup();
           console.log(`[prompt] done session=${sessionId} chunks=${chunks.length}`);
@@ -385,6 +414,12 @@ export function createBot(token: string, allowedUsers: number[]): Bot {
           }
           for (let i = 1; i < chunks.length; i++) {
             await ctx.api.sendMessage(chatId, chunks[i]!, { parse_mode: "MarkdownV2" });
+          }
+          // Save exchange to disk for qmd indexing
+          try {
+            saveExchange(userText, chunks.join("\n"));
+          } catch (err) {
+            console.error(`[memory] failed to save exchange:`, err);
           }
         })
         .catch(async (err) => {

@@ -2,6 +2,7 @@ import "dotenv/config";
 import { healthCheck } from "./opencode.js";
 import { subscribeEvents } from "./events.js";
 import { createBot } from "./telegram.js";
+import { initExchangesDir } from "./memory.js";
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
 if (!token) throw new Error("TELEGRAM_BOT_TOKEN is required");
@@ -20,6 +21,7 @@ console.log("clawcode bridge starting...");
 
 await healthCheck();
 await subscribeEvents();
+initExchangesDir();
 
 const bot = createBot(token, allowedUsers);
 
@@ -40,6 +42,7 @@ await bot.api.setMyCommands([
   { command: "abort", description: "Abort current session" },
   { command: "autoapprove", description: "Toggle auto-approve (on|off)" },
   { command: "history", description: "Recent messages from current session" },
+  { command: "remember", description: "Save a memory (/remember <text>)" },
   { command: "start_llama", description: "Start llama service" },
   { command: "stop_llama", description: "Stop llama service" },
 ]);

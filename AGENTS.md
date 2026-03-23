@@ -21,7 +21,11 @@ src/
   opencode.ts    -- SDK client wrapper: session CRUD, prompt, abort, permissions, auto-approve
   format.ts      -- MarkdownV2 escaping, code block preservation, tool summaries, message chunking
   events.ts      -- SSE subscription: message.part.updated, permission.asked, streaming dispatch
+  memory.ts      -- exchange logging: saves every Telegram exchange as markdown to exchanges/
   types.ts       -- shared types (unused, stale)
+skills/
+  remember/SKILL.md  -- OpenCode skill: append user-specified memories to MEMORY.md
+  recall/SKILL.md    -- OpenCode skill: search past exchanges via qmd
 ```
 
 ## Key Details
@@ -37,6 +41,10 @@ src/
   with different property shapes. Custom `PermissionEvent` interface in events.ts handles this.
 - No SSE reconnection logic; relies on systemd `Restart=on-failure` for recovery
 - Runtime: bun (no build step)
+- Every exchange is saved as `exchanges/YYYY-MM-DD-HHMMSS.md` (qmd-compatible markdown with YAML frontmatter)
+- `/remember` sends a prompt to OpenCode that triggers the `remember` skill to append to `MEMORY.md`
+- `recall` skill lets the model search past exchanges via qmd on demand
+- Skills live in `skills/` in this repo, installed to `OPENCODE_WORKSPACE/.opencode/skills/` via `make install`
 
 ## Config
 
@@ -45,6 +53,7 @@ src/
 - `TELEGRAM_ALLOWED_USERS` -- required, comma-separated Telegram user IDs
 - `OPENCODE_URL` -- optional, default `http://127.0.0.1:4096`
 - `OPENCODE_WORKSPACE` -- optional, server working directory (used by Makefile at install time)
+- `EXCHANGES_DIR` -- optional, exchange log directory (default `./exchanges`)
 
 ## Dev Flow
 
@@ -54,7 +63,7 @@ src/
 
 ## Deployment
 
-`make install` -- sed-substitutes `{{WORKDIR}}` in service files and copies to `~/.config/systemd/user/`, reload daemon. Server WorkingDirectory comes from `OPENCODE_WORKSPACE` in `.env` (falls back to cwd).
+`make install` -- sed-substitutes `{{WORKDIR}}` in service files and copies to `~/.config/systemd/user/`, reload daemon. Server WorkingDirectory comes from `OPENCODE_WORKSPACE` in `.env` (falls back to cwd). Also installs skills to `OPENCODE_WORKSPACE/.opencode/skills/`.
 `make uninstall` -- disable, remove, reload.
 
 ## Key Decisions

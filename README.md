@@ -40,8 +40,27 @@ make uninstall
 | `/abort` | Abort current session |
 | `/autoapprove on\|off` | Toggle auto-approve for permissions |
 | `/history` | Recent messages from current session |
+| `/remember <text>` | Save a memory to MEMORY.md via OpenCode |
 | `/start_llama` | Start llama systemd service |
 | `/stop_llama` | Stop llama systemd service |
 
 Send any text message to prompt OpenCode. Responses stream in real-time.
 Permission requests appear as inline keyboards.
+
+## Memory System
+
+Every exchange is automatically saved to `exchanges/` as qmd-compatible markdown.
+
+- `/remember <text>` — tells OpenCode to append a memory to `MEMORY.md` in the workspace (always read on startup)
+- The `recall` skill lets the model search past exchanges via qmd on demand
+
+### qmd Setup
+
+After first run, create a qmd collection for the exchanges:
+
+```bash
+qmd collection add /path/to/exchanges --name exchanges --mask "**/*.md"
+qmd embed
+```
+
+Run `qmd embed` periodically (or via cron) to index new exchanges.

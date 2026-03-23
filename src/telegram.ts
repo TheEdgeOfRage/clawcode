@@ -408,11 +408,6 @@ export function createBot(token: string, allowedUsers: number[]): Bot {
       sendPrompt(sessionId, userText)
         .then(async (parts) => {
           cleanup();
-          // Final edit of streaming message with complete tool history
-          if (responseMsgId !== null) {
-            const toolSummary = formatParts(parts);
-            if (toolSummary) await editMessage(ctx, responseMsgId, toolSummary);
-          }
           // Send final text as separate new message(s)
           const textContent = formatTextParts(parts);
           if (textContent) {

@@ -106,14 +106,7 @@ export function createBot(token: string, allowedUsers: number[]): Bot {
     }
   });
 
-  bot.command("start", async (ctx) => {
-    const sessionId = getSessionId(ctx.chat.id);
-    const autoApproveStatus = sessionId && isAutoApprove(sessionId) ? "on" : "off";
-    await ctx.reply(
-      `Welcome to ClawCode\\! Send me a message and I'll forward it to OpenCode\\.\n\nAuto\\-approve: *${autoApproveStatus}*`,
-      { parse_mode: "MarkdownV2" },
-    );
-  });
+
 
   bot.command("new", async (ctx) => {
     const chatId = ctx.chat.id;

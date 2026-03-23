@@ -1,6 +1,6 @@
-# ClawCode
+# CodeClaw
 
-Telegram interface for [OpenCode](https://opencode.ai).
+Telegram interface for [OpenCode](https://opencode.ai), implemented as an OpenCode plugin.
 
 ## Prerequisites
 
@@ -17,12 +17,23 @@ cp .env.example .env
 # Edit .env with your bot token and allowed user IDs
 ```
 
-## Running
+## Install
+
+Symlink the plugin into your OpenCode workspace:
+
+```bash
+mkdir -p /path/to/workspace/.opencode/plugins
+ln -s /path/to/codeclaw/src/main.ts /path/to/workspace/.opencode/plugins/codeclaw.ts
+```
+
+Or use the Makefile to install the systemd service and skills:
 
 ```bash
 make install
-systemctl --user enable --now opencode-server.service clawcode-bridge.service
+systemctl --user enable --now opencode-server.service
 ```
+
+Set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_ALLOWED_USERS` in the server's environment (e.g., `EnvironmentFile=` in the systemd unit).
 
 To remove:
 

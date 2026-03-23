@@ -1,5 +1,5 @@
 SYSTEMD_DIR = $(HOME)/.config/systemd/user
-SERVICES = opencode-server.service clawcode-bridge.service
+SERVICES = opencode-server.service
 SKILLS = remember recall
 
 .PHONY: install uninstall lint typecheck check install-skills
@@ -10,7 +10,6 @@ SERVER_WORKDIR = $(if $(OPENCODE_WORKSPACE),$(OPENCODE_WORKSPACE),$(CURDIR))
 install: install-skills
 	mkdir -p $(SYSTEMD_DIR)
 	sed 's|{{WORKDIR}}|$(SERVER_WORKDIR)|g' opencode-server.service > $(SYSTEMD_DIR)/opencode-server.service
-	sed 's|{{WORKDIR}}|$(CURDIR)|g' clawcode-bridge.service > $(SYSTEMD_DIR)/clawcode-bridge.service
 	systemctl --user daemon-reload
 
 install-skills:

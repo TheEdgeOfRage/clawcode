@@ -1,10 +1,7 @@
-import { createOpencodeClient, type Event, type EventMessageUpdated, type EventMessagePartUpdated, type Part } from "@opencode-ai/sdk/client";
+import type { Event, EventMessageUpdated, EventMessagePartUpdated, Part } from "@opencode-ai/sdk";
 
-const OPENCODE_URL = process.env.OPENCODE_URL || "http://127.0.0.1:4096";
-
-const sseClient = createOpencodeClient({ baseUrl: OPENCODE_URL });
-
-// Actual shape from the server (differs from SDK's Permission type)
+// Server sends `permission.asked` with this shape, which diverges from the SDK's
+// v1 Permission type. Keep a local interface until the SDK aligns.
 export interface PermissionEvent {
   id: string;
   sessionID: string;
@@ -39,7 +36,7 @@ export function unregisterSession(sessionId: string): void {
   handlers.delete(sessionId);
 }
 
-function handleEvent(event: Event): void {
+export function handleEvent(event: Event): void {
   const type = event.type as string;
 
   if (type === "message.updated") {
@@ -69,19 +66,4 @@ function handleEvent(event: Event): void {
     handler.onPermission(perm);
     return;
   }
-}
-
-export async function subscribeEvents(): Promise<void> {
-  const { stream } = await sseClient.event.subscribe();
-  void (async () => {
-    for await (const event of stream) {
-      try {
-        handleEvent(event);
-      } catch (err) {
-        console.error("[events] handler error:", err);
-      }
-    }
-    console.error("[events] SSE stream ended unexpectedly");
-  })();
-  console.log("[events] SSE stream connected");
 }

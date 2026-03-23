@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { Bot, InlineKeyboard, type Context } from "grammy";
-import type { Part } from "@opencode-ai/sdk/client";
+import type { Part } from "@opencode-ai/sdk";
 import type { PermissionEvent } from "./events.js";
 import { escapeMarkdownV2, formatParts, splitMessage } from "./format.js";
 import {

@@ -1,31 +1,37 @@
-import { createOpencodeClient, type Part } from "@opencode-ai/sdk/client";
+import type { createOpencodeClient, Part } from "@opencode-ai/sdk";
 import { formatParts, splitMessage } from "./format.js";
 import { readFileSync, writeFileSync } from "fs";
 import { resolve } from "path";
 
-const OPENCODE_URL = process.env.OPENCODE_URL || "http://127.0.0.1:4096";
-const SESSIONS_FILE = resolve(process.env.SESSIONS_FILE || "./sessions.json");
+type Client = ReturnType<typeof createOpencodeClient>;
 
-const client = createOpencodeClient({ baseUrl: OPENCODE_URL });
+let client: Client;
+let sessionsFile: string;
 
-function loadSessions(): Map<number, string> {
+const chatSessions = new Map<number, string>();
+const autoApprove = new Set<string>();
+
+export function init(c: Client, directory: string): void {
+  client = c;
+  sessionsFile = resolve(directory, "sessions.json");
+  loadSessions();
+}
+
+function loadSessions(): void {
   try {
-    const raw = readFileSync(SESSIONS_FILE, "utf8");
+    const raw = readFileSync(sessionsFile, "utf8");
     const obj = JSON.parse(raw) as Record<string, string>;
-    return new Map(Object.entries(obj).map(([k, v]) => [Number(k), v]));
+    for (const [k, v] of Object.entries(obj)) chatSessions.set(Number(k), v);
   } catch {
-    return new Map();
+    // no file or invalid — start fresh
   }
 }
 
-function saveSessions(map: Map<number, string>): void {
+function saveSessions(): void {
   const obj: Record<string, string> = {};
-  for (const [k, v] of map) obj[String(k)] = v;
-  writeFileSync(SESSIONS_FILE, JSON.stringify(obj, null, 2));
+  for (const [k, v] of chatSessions) obj[String(k)] = v;
+  writeFileSync(sessionsFile, JSON.stringify(obj, null, 2));
 }
-
-const chatSessions = loadSessions();
-const autoApprove = new Set<string>();
 
 export function setAutoApprove(sessionId: string, enabled: boolean): void {
   if (enabled) autoApprove.add(sessionId);
@@ -36,42 +42,15 @@ export function isAutoApprove(sessionId: string): boolean {
   return autoApprove.has(sessionId);
 }
 
-export async function healthCheck(
-  maxRetries = 10,
-  baseDelayMs = 500,
-): Promise<void> {
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    try {
-      const result = await client.session.list();
-      if (result.response.ok) {
-        console.log(`opencode server ready at ${OPENCODE_URL}`);
-        return;
-      }
-    } catch {
-      // server not up yet
-    }
-    const delay = baseDelayMs * 2 ** attempt;
-    console.log(
-      `opencode not ready, retrying in ${delay}ms (${attempt + 1}/${maxRetries})`,
-    );
-    await new Promise((r) => setTimeout(r, delay));
-  }
-  throw new Error(
-    `opencode server at ${OPENCODE_URL} not reachable after ${maxRetries} retries`,
-  );
-}
-
 export async function getOrCreateSession(
   chatId: number,
 ): Promise<{ sessionId: string; fallback: boolean }> {
   const existing = chatSessions.get(chatId);
   if (existing) {
-    // Validate session still exists on the server
     const list = await client.session.list();
     if (!list.error && list.data?.some((s) => s.id === existing)) {
       return { sessionId: existing, fallback: false };
     }
-    // Session gone — fall through to create a new one
   }
 
   const result = await client.session.create();
@@ -79,7 +58,7 @@ export async function getOrCreateSession(
 
   const sessionId = result.data.id;
   chatSessions.set(chatId, sessionId);
-  saveSessions(chatSessions);
+  saveSessions();
   return { sessionId, fallback: existing !== undefined };
 }
 
@@ -103,7 +82,7 @@ export async function createNewSession(chatId: number): Promise<string> {
 
   const sessionId = result.data.id;
   chatSessions.set(chatId, sessionId);
-  saveSessions(chatSessions);
+  saveSessions();
   return sessionId;
 }
 
@@ -127,7 +106,7 @@ export function getSessionId(chatId: number): string | undefined {
 
 export function switchSession(chatId: number, sessionId: string): void {
   chatSessions.set(chatId, sessionId);
-  saveSessions(chatSessions);
+  saveSessions();
 }
 
 export async function getSessionMessages(

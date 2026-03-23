@@ -8,7 +8,6 @@ let client: Client;
 let sessionsFile: string;
 
 const chatSessions = new Map<number, string>();
-const autoApprove = new Set<string>();
 
 export function init(c: Client, directory: string): void {
   client = c;
@@ -30,15 +29,6 @@ function saveSessions(): void {
   const obj: Record<string, string> = {};
   for (const [k, v] of chatSessions) obj[String(k)] = v;
   writeFileSync(sessionsFile, JSON.stringify(obj, null, 2));
-}
-
-export function setAutoApprove(sessionId: string, enabled: boolean): void {
-  if (enabled) autoApprove.add(sessionId);
-  else autoApprove.delete(sessionId);
-}
-
-export function isAutoApprove(sessionId: string): boolean {
-  return autoApprove.has(sessionId);
 }
 
 export async function getOrCreateSession(

@@ -3,7 +3,7 @@ import { Bot, InlineKeyboard, type Context } from "grammy";
 import type { Part } from "@opencode-ai/sdk";
 import * as log from "./log.js";
 import type { PermissionEvent } from "./events.js";
-import { escapeMarkdownV2, formatParts, splitMessage } from "./format.js";
+import { escapeMarkdownV2, formatParts, formatTextParts, splitMessage } from "./format.js";
 import {
   getOrCreateSession,
   createNewSession,
@@ -298,7 +298,8 @@ export function createBot(token: string, allowedUsers: number[]): Bot {
       const { sessionId } = await getOrCreateSession(chatId);
       const prompt = `Use the remember skill to save this memory: ${text}`;
       sendPrompt(sessionId, prompt)
-        .then(async (chunks) => {
+        .then(async (parts) => {
+          const chunks = splitMessage(formatTextParts(parts));
           for (const chunk of chunks) {
             await ctx.api.sendMessage(chatId, chunk, { parse_mode: "MarkdownV2" });
           }
@@ -405,20 +406,25 @@ export function createBot(token: string, allowedUsers: number[]): Bot {
       const userText = ctx.message.text;
       log.info(`[prompt] sending to session=${sessionId}`);
       sendPrompt(sessionId, userText)
-        .then(async (chunks) => {
+        .then(async (parts) => {
           cleanup();
-          log.info(`[prompt] done session=${sessionId} chunks=${chunks.length}`);
+          // Final edit of streaming message with complete tool history
           if (responseMsgId !== null) {
-            await editMessage(ctx, responseMsgId, chunks[0]!);
-          } else {
-            await ctx.api.sendMessage(chatId, chunks[0]!, { parse_mode: "MarkdownV2" });
+            const toolSummary = formatParts(parts);
+            if (toolSummary) await editMessage(ctx, responseMsgId, toolSummary);
           }
-          for (let i = 1; i < chunks.length; i++) {
-            await ctx.api.sendMessage(chatId, chunks[i]!, { parse_mode: "MarkdownV2" });
+          // Send final text as separate new message(s)
+          const textContent = formatTextParts(parts);
+          if (textContent) {
+            const chunks = splitMessage(textContent);
+            log.info(`[prompt] done session=${sessionId} chunks=${chunks.length}`);
+            for (const chunk of chunks) {
+              await ctx.api.sendMessage(chatId, chunk, { parse_mode: "MarkdownV2" });
+            }
           }
           // Save exchange to disk for qmd indexing
           try {
-            saveExchange(userText, chunks.join("\n"));
+            saveExchange(userText, formatTextParts(parts));
           } catch (err) {
             log.error(`[memory] failed to save exchange:`, err);
           }

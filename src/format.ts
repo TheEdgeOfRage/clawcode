@@ -47,8 +47,17 @@ function formatToolPart(part: Extract<Part, { type: "tool" }>): string {
     (input["file"] as string | undefined) ??
     (input["command"] as string | undefined) ??
     "";
-  const suffix = target ? ` \\(${escapeMarkdownV2(target)}\\)` : "";
-  return `> Tool: ${escapeMarkdownV2(part.tool)}${suffix}`;
+  const suffix = target ? ` (${target})` : "";
+  return "```\nTool: " + part.tool + suffix + "\n```";
+}
+
+/** Format only text parts (no tool summaries) */
+export function formatTextParts(parts: Part[]): string {
+  const segments: string[] = [];
+  for (const part of parts) {
+    if (part.type === "text") segments.push(escapeWithCodeBlocks(part.text));
+  }
+  return segments.join("\n");
 }
 
 /** Extract formatted text from OpenCode Part[] response */

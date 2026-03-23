@@ -1,5 +1,4 @@
 import type { createOpencodeClient, Part } from "@opencode-ai/sdk";
-import { formatParts, splitMessage } from "./format.js";
 import { readFileSync, writeFileSync } from "fs";
 import { resolve } from "path";
 
@@ -65,15 +64,14 @@ export async function getOrCreateSession(
 export async function sendPrompt(
   sessionId: string,
   text: string,
-): Promise<string[]> {
+): Promise<Part[]> {
   const result = await client.session.prompt({
     path: { id: sessionId },
     body: { parts: [{ type: "text", text }] },
   });
   if (result.error) throw new Error(`prompt failed: ${JSON.stringify(result.error)}`);
 
-  const formatted = formatParts(result.data.parts);
-  return splitMessage(formatted);
+  return result.data.parts;
 }
 
 export async function createNewSession(chatId: number): Promise<string> {

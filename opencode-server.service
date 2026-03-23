@@ -5,6 +5,7 @@ After=network.target
 [Service]
 Type=simple
 WorkingDirectory={{WORKDIR}}
+EnvironmentFile={{WORKDIR}}/.env
 ExecStart=/usr/bin/opencode serve --port 4096
 Restart=on-failure
 RestartSec=3

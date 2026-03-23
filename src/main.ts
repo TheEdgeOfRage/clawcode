@@ -1,4 +1,5 @@
 import type { Plugin } from "@opencode-ai/plugin";
+import * as log from "./log.js";
 import { init } from "./opencode.js";
 import { handleEvent } from "./events.js";
 import { createBot } from "./telegram.js";
@@ -35,7 +36,7 @@ export const ClawCode: Plugin = async ({ client, directory }) => {
     { command: "stop_llama", description: "Stop llama service" },
   ]);
 
-  console.log("[clawcode] telegram bot starting long-polling...");
+  log.info("telegram bot starting long-polling...");
   bot.start();
 
   return {
@@ -43,7 +44,7 @@ export const ClawCode: Plugin = async ({ client, directory }) => {
       try {
         handleEvent(event);
       } catch (err) {
-        console.error("[clawcode] event handler error:", err);
+        log.error("event handler error:", err);
       }
     },
   };

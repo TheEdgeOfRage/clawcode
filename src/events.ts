@@ -1,4 +1,5 @@
 import type { Event, EventMessageUpdated, EventMessagePartUpdated, Part } from "@opencode-ai/sdk";
+import * as log from "./log.js";
 
 // Server sends `permission.asked` with this shape, which diverges from the SDK's
 // v1 Permission type. Keep a local interface until the SDK aligns.
@@ -60,7 +61,7 @@ export function handleEvent(event: Event): void {
 
   if (type === "permission.asked" || type === "permission.updated") {
     const perm = event.properties as unknown as PermissionEvent;
-    console.log(`[events] ${type} session=${perm.sessionID} perm=${perm.id} permission=${perm.permission}`);
+    log.info(`[events] ${type} session=${perm.sessionID} perm=${perm.id} permission=${perm.permission}`);
     const handler = handlers.get(perm.sessionID);
     if (!handler) return;
     handler.onPermission(perm);

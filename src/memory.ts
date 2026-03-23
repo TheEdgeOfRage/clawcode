@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, writeFileSync } from "fs";
 import { resolve, join } from "path";
+import * as log from "./log.js";
 
 let exchangesDir: string;
 
@@ -7,7 +8,7 @@ export function initExchangesDir(directory: string): void {
   exchangesDir = resolve(process.env.EXCHANGES_DIR || join(directory, "exchanges"));
   if (!existsSync(exchangesDir)) {
     mkdirSync(exchangesDir, { recursive: true });
-    console.log(`[memory] created exchanges dir: ${exchangesDir}`);
+    log.info(`[memory] created exchanges dir: ${exchangesDir}`);
   }
 }
 
@@ -34,5 +35,5 @@ export function saveExchange(userMessage: string, assistantResponse: string): vo
   ].join("\n");
 
   writeFileSync(filepath, content);
-  console.log(`[memory] saved exchange: ${filename}`);
+  log.info(`[memory] saved exchange: ${filename}`);
 }

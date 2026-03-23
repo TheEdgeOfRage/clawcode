@@ -7,6 +7,8 @@ Type=simple
 WorkingDirectory={{WORKDIR}}
 EnvironmentFile={{WORKDIR}}/.env
 ExecStart=/usr/bin/opencode serve --port 4096
+ExecStartPost=/bin/sh -c 'while ! curl -sf http://127.0.0.1:4096/project/current; do sleep 1; done'
+TimeoutStartSec=10
 Restart=on-failure
 RestartSec=3
 

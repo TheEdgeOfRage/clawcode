@@ -18,7 +18,7 @@ The server loads the plugin at startup. The plugin starts a grammY long-polling 
 src/
   main.ts        -- plugin entry: env validation, bot start, event hook
   telegram.ts    -- grammY bot: auth middleware, commands, prompt dispatch, streaming edits
-  opencode.ts    -- SDK client wrapper: session CRUD, prompt, abort, permissions, auto-approve
+  opencode.ts    -- SDK client wrapper: session CRUD, prompt, abort, permissions
   format.ts      -- MarkdownV2 escaping, code block preservation, tool summaries, message chunking
   events.ts      -- event router: message.part.updated, permission.asked, streaming dispatch
   memory.ts      -- exchange logging: saves every Telegram exchange as markdown to exchanges/
@@ -35,7 +35,7 @@ skills/
 - Session-to-chat mapping persisted to `sessions.json` (resolved relative to `directory` from plugin context)
 - Streaming uses edit-in-place with 2s throttle to stay under Telegram rate limits
 - Prompt is fired non-blocking (`.then/.catch`) so grammY can process permission callbacks while waiting
-- Permission requests surface as inline keyboards (Allow/Session/Deny); auto-approve is per-session toggle
+- Permission requests surface as inline keyboards (Allow/Session/Deny)
 - Permission callback data uses short counter keys (Telegram 64-byte limit on callback data)
 - Message chunking respects code block boundaries at 4096 char Telegram limit
 - Server sends `permission.asked` with a shape that diverges from the SDK's v1 `Permission` type.
@@ -51,6 +51,7 @@ skills/
 ## Config
 
 Environment variables (set in server's environment or systemd `EnvironmentFile=`):
+
 - `TELEGRAM_BOT_TOKEN` -- required
 - `TELEGRAM_ALLOWED_USERS` -- required, comma-separated Telegram user IDs
 - `OPENCODE_WORKSPACE` -- optional, server working directory (used by Makefile at install time)
@@ -78,7 +79,7 @@ Install the plugin into the OpenCode workspace's plugin directory (symlink or co
 | Telegram lib | grammY | Lightweight, TypeScript-native |
 | Runtime | bun | No build step, runs TS directly |
 | Bot mode | Long polling | Simpler than webhooks for single-user |
-| Session mapping | File-persisted Map | Survives restarts; auto-approve is in-memory only |
+| Session mapping | File-persisted Map | Survives restarts |
 | Deployment | systemd user service | Reliable, auto-restart, journald logging |
 | Streaming | Edit-in-place messages | ChatGPT-style UX with 2s throttle |
 | Prompt execution | Non-blocking `.then/.catch` | Avoids deadlock: grammY must process permission callbacks while prompt blocks |

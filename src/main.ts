@@ -29,6 +29,7 @@ export const ClawCode: Plugin = async ({ client, directory }) => {
     { command: "sessions", description: "List and switch sessions" },
     { command: "abort", description: "Abort current session" },
     { command: "history", description: "Recent messages from current session" },
+    { command: "agent", description: "Switch agent (/agent <name>)" },
     { command: "remember", description: "Save a memory (/remember <text>)" },
     { command: "start_llama", description: "Start llama service" },
     { command: "stop_llama", description: "Stop llama service" },

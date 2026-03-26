@@ -8,6 +8,7 @@ let client: Client;
 let sessionsFile: string;
 
 const chatSessions = new Map<number, string>();
+const chatAgents = new Map<number, string>();
 
 export function init(c: Client, directory: string): void {
   client = c;
@@ -51,13 +52,29 @@ export async function getOrCreateSession(
   return { sessionId, fallback: existing !== undefined };
 }
 
+export async function listAgents(): Promise<string[]> {
+  const result = await client.app.agents();
+  if (result.error) throw new Error(`list agents failed: ${JSON.stringify(result.error)}`);
+  if (!result.data) return [];
+  return result.data.map((a) => a.name);
+}
+
+export function getAgent(chatId: number): string | undefined {
+  return chatAgents.get(chatId);
+}
+
+export function setAgent(chatId: number, agent: string): void {
+  chatAgents.set(chatId, agent);
+}
+
 export async function sendPrompt(
   sessionId: string,
   text: string,
+  agent?: string,
 ): Promise<Part[]> {
   const result = await client.session.prompt({
     path: { id: sessionId },
-    body: { parts: [{ type: "text", text }] },
+    body: { parts: [{ type: "text", text }], ...(agent ? { agent } : {}) },
   });
   if (result.error) throw new Error(`prompt failed: ${JSON.stringify(result.error)}`);
 

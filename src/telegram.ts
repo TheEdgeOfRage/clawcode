@@ -14,6 +14,9 @@ import {
   abortSession,
   sendPrompt,
   replyPermission,
+  listAgents,
+  getAgent,
+  setAgent,
 } from "./opencode.js";
 import { registerSession, unregisterSession } from "./events.js";
 import { saveExchange } from "./memory.js";
@@ -254,6 +257,48 @@ export function createBot(token: string, allowedUsers: number[]): Bot {
     }
   });
 
+  bot.command("agent", async (ctx) => {
+    const chatId = ctx.chat.id;
+    const name = ctx.match?.trim().toLowerCase();
+    log.info(`[cmd] /agent chat=${chatId} arg=${name ?? "(none)"}`);
+
+    if (!name) {
+      // Show current agent and list available
+      try {
+        const agents = await listAgents();
+        const current = getAgent(chatId) ?? escapeMarkdownV2("(default)");
+        const list = agents.map((a) => escapeMarkdownV2(a)).join(", ");
+        await ctx.reply(
+          `Current agent: \`${current}\`\nAvailable: ${list}\n\nUsage: /agent \\<name\\>`,
+          { parse_mode: "MarkdownV2" },
+        );
+      } catch (err) {
+        log.error(`[cmd] /agent list error:`, err);
+        await ctx.reply(`Failed to list agents: ${String(err)}`);
+      }
+      return;
+    }
+
+    try {
+      const agents = await listAgents();
+      const match = agents.find((a) => a.toLowerCase() === name);
+      if (!match) {
+        const list = agents.map((a) => escapeMarkdownV2(a)).join(", ");
+        await ctx.reply(
+          `Unknown agent \`${escapeMarkdownV2(name)}\`\\. Available: ${list}`,
+          { parse_mode: "MarkdownV2" },
+        );
+        return;
+      }
+      setAgent(chatId, match);
+      log.info(`[agent] set agent=${match} chat=${chatId}`);
+      await ctx.reply(`Agent set to \`${escapeMarkdownV2(match)}\`\\.`, { parse_mode: "MarkdownV2" });
+    } catch (err) {
+      log.error(`[cmd] /agent error:`, err);
+      await ctx.reply(`Error: ${String(err)}`);
+    }
+  });
+
   bot.command("remember", async (ctx) => {
     const chatId = ctx.chat.id;
     const text = ctx.match?.trim();
@@ -265,7 +310,7 @@ export function createBot(token: string, allowedUsers: number[]): Bot {
     try {
       const { sessionId } = await getOrCreateSession(chatId);
       const prompt = `Use the remember skill to save this memory: ${text}`;
-      sendPrompt(sessionId, prompt)
+      sendPrompt(sessionId, prompt, getAgent(chatId))
         .then(async (parts) => {
           const chunks = splitMessage(formatTextParts(parts));
           for (const chunk of chunks) {
@@ -363,8 +408,9 @@ export function createBot(token: string, allowedUsers: number[]): Bot {
 
       // Fire prompt without blocking grammY's update loop (permissions need callback handling)
       const userText = ctx.message.text;
-      log.info(`[prompt] sending to session=${sessionId}`);
-      sendPrompt(sessionId, userText)
+      const activeAgent = getAgent(chatId);
+      log.info(`[prompt] sending to session=${sessionId} agent=${activeAgent ?? "(default)"}`);
+      sendPrompt(sessionId, userText, activeAgent)
         .then(async (parts) => {
           cleanup();
           // Send final text as separate new message(s)

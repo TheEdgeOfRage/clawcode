@@ -25,11 +25,9 @@ export const ClawCode: Plugin = async ({ client, directory }) => {
   const bot = createBot(token, allowedUsers);
 
   await bot.api.setMyCommands([
-    { command: "start", description: "Welcome message" },
     { command: "new", description: "New session" },
     { command: "sessions", description: "List and switch sessions" },
     { command: "abort", description: "Abort current session" },
-    { command: "autoapprove", description: "Toggle auto-approve (on|off)" },
     { command: "history", description: "Recent messages from current session" },
     { command: "remember", description: "Save a memory (/remember <text>)" },
     { command: "start_llama", description: "Start llama service" },

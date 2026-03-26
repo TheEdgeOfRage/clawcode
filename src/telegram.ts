@@ -14,8 +14,6 @@ import {
   abortSession,
   sendPrompt,
   replyPermission,
-  setAutoApprove,
-  isAutoApprove,
 } from "./opencode.js";
 import { registerSession, unregisterSession } from "./events.js";
 import { saveExchange } from "./memory.js";
@@ -106,14 +104,7 @@ export function createBot(token: string, allowedUsers: number[]): Bot {
     }
   });
 
-  bot.command("start", async (ctx) => {
-    const sessionId = getSessionId(ctx.chat.id);
-    const autoApproveStatus = sessionId && isAutoApprove(sessionId) ? "on" : "off";
-    await ctx.reply(
-      `Welcome to ClawCode\\! Send me a message and I'll forward it to OpenCode\\.\n\nAuto\\-approve: *${autoApproveStatus}*`,
-      { parse_mode: "MarkdownV2" },
-    );
-  });
+
 
   bot.command("new", async (ctx) => {
     const chatId = ctx.chat.id;
@@ -179,29 +170,6 @@ export function createBot(token: string, allowedUsers: number[]): Bot {
       log.error(`[cmd] /abort error:`, err);
       await ctx.reply(`Failed to abort: ${String(err)}`);
     }
-  });
-
-  bot.command("autoapprove", async (ctx) => {
-    log.info(`[cmd] /autoapprove chat=${ctx.chat.id}`);
-    const arg = ctx.match?.trim().toLowerCase();
-    if (arg !== "on" && arg !== "off") {
-      await ctx.reply("Usage: /autoapprove on \\| off", { parse_mode: "MarkdownV2" });
-      return;
-    }
-    const sessionId = getSessionId(ctx.chat.id);
-    if (!sessionId) {
-      await ctx.reply("No active session\\. Use /new to create one\\.", {
-        parse_mode: "MarkdownV2",
-      });
-      return;
-    }
-    const enabled = arg === "on";
-    setAutoApprove(sessionId, enabled);
-    log.info(`[session] autoapprove=${enabled} session=${sessionId}`);
-    await ctx.reply(
-      escapeMarkdownV2(`Auto-approve ${enabled ? "enabled" : "disabled"} for current session.`),
-      { parse_mode: "MarkdownV2" },
-    );
   });
 
   bot.command("history", async (ctx) => {
@@ -380,15 +348,6 @@ export function createBot(token: string, allowedUsers: number[]): Bot {
         // onPermission
         async (perm: PermissionEvent) => {
           log.info(`[permission] request permission=${perm.permission} session=${perm.sessionID} perm=${perm.id}`);
-          if (isAutoApprove(perm.sessionID)) {
-            log.info(`[permission] auto-approving perm=${perm.id}`);
-            await replyPermission(perm.sessionID, perm.id, "once");
-            await ctx.api.sendMessage(chatId,
-              escapeMarkdownV2(`Auto-approved: ${perm.permission} ${perm.patterns.join(", ")}`),
-              { parse_mode: "MarkdownV2" },
-            );
-            return;
-          }
           const key = String(++permCounter);
           pendingPerms.set(key, { sessionId: perm.sessionID, permissionId: perm.id });
           const keyboard = new InlineKeyboard()

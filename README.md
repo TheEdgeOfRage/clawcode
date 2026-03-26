@@ -49,7 +49,6 @@ make uninstall
 | `/new` | New session |
 | `/sessions` | List and switch sessions |
 | `/abort` | Abort current session |
-| `/autoapprove on\|off` | Toggle auto-approve for permissions |
 | `/history` | Recent messages from current session |
 | `/remember <text>` | Save a memory to MEMORY.md via OpenCode |
 | `/start_llama` | Start llama systemd service |

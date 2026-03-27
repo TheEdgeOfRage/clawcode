@@ -385,12 +385,16 @@ export function createBot(token: string, allowedUsers: number[]): Bot {
       }, 4000);
       void ctx.api.sendChatAction(chatId, "typing");
 
-      // Streaming state
-      let responseMsgId: number | null = null;
-      let sendingFirst = false;
+      // Send "thinking..." immediately, then edit-in-place as streaming arrives
       let lastEditTime = 0;
       let editTimer: ReturnType<typeof setTimeout> | null = null;
       let latestPreview = "";
+      const thinkingMsg = await ctx.api.sendMessage(
+        chatId,
+        escapeMarkdownV2("thinking..."),
+        { parse_mode: "MarkdownV2" },
+      );
+      const responseMsgId = thinkingMsg.message_id;
 
       const cleanup = () => {
         if (editTimer) { clearTimeout(editTimer); editTimer = null; }
@@ -399,7 +403,7 @@ export function createBot(token: string, allowedUsers: number[]): Bot {
       };
 
       const flushEdit = () => {
-        if (latestPreview && responseMsgId !== null) {
+        if (latestPreview) {
           const textToSend = channelChatId !== null ? formatAsQuote(latestPreview) : latestPreview;
           void editMessage(ctx, responseMsgId, textToSend);
           lastEditTime = Date.now();
@@ -412,15 +416,6 @@ export function createBot(token: string, allowedUsers: number[]): Bot {
         // onPart — send first message on first data, then throttled edits
         (parts: Part[]) => {
           latestPreview = formatPartsPreview(parts);
-          if (responseMsgId === null) {
-            if (sendingFirst) return;
-            sendingFirst = true;
-            const textToSend = channelChatId !== null ? formatAsQuote(latestPreview) : latestPreview;
-            void ctx.api.sendMessage(chatId, textToSend, { parse_mode: "MarkdownV2" })
-              .then((msg) => { responseMsgId = msg.message_id; lastEditTime = Date.now(); })
-              .catch((err) => log.error(`[prompt] failed to send first message:`, err));
-            return;
-          }
           const elapsed = Date.now() - lastEditTime;
           if (elapsed >= THROTTLE_MS) {
             if (editTimer) clearTimeout(editTimer);
@@ -474,12 +469,8 @@ export function createBot(token: string, allowedUsers: number[]): Bot {
           cleanup();
           log.error(`[prompt] error session=${sessionId}:`, err);
           const errText = escapeMarkdownV2(`Error: ${String(err)}`);
-          const errTextQuoted = channelChatId !== null ? formatAsQuote(errText) : errText;
-          if (responseMsgId !== null) {
-            await editMessage(ctx, responseMsgId, errTextQuoted);
-          } else {
-            await ctx.api.sendMessage(chatId, errTextQuoted, { parse_mode: "MarkdownV2" });
-          }
+          const errTextToSend = channelChatId !== null ? formatAsQuote(errText) : errText;
+          await editMessage(ctx, responseMsgId, errTextToSend);
         });
     } catch (err) {
       log.error(`[prompt] unhandled error chat=${chatId}:`, err);

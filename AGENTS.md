@@ -10,18 +10,19 @@ Single process — the plugin runs inside the OpenCode server. No separate bridg
 Telegram <-> Plugin (grammY bot) <-> OpenCode Server (in-process)
 ```
 
-The server loads the plugin at startup. The plugin starts a grammY long-polling bot and receives server events via the plugin `event` hook.
+The server loads the plugin at startup. The Telegram bot is **on-demand** by default — it only connects when the `telegram` tool is called with `action: "connect"` (or via `/telegram connect` command). Set `TELEGRAM_AUTOCONNECT=1` to auto-start (the systemd unit does this). The plugin receives server events via the plugin `event` hook.
 
 ## Source Layout
 
 ```
 src/
-  main.ts        -- plugin entry: env validation, bot start, event hook
+  main.ts        -- plugin entry: env validation, on-demand bot, telegram tool, event hook
   telegram.ts    -- grammY bot: auth middleware, commands, prompt dispatch, streaming edits
   opencode.ts    -- SDK client wrapper: session CRUD, prompt, abort, permissions
   format.ts      -- MarkdownV2 escaping, code block preservation, tool summaries, message chunking
   events.ts      -- event router: message.part.updated, permission.asked, streaming dispatch
   memory.ts      -- exchange logging: saves every Telegram exchange as markdown to exchanges/
+  log.ts         -- file-based logger (~/.local/share/clawcode/log/)
 .opencode/
   skills/
     remember/SKILL.md  -- OpenCode skill: append user-specified memories to MEMORY.md
@@ -59,10 +60,12 @@ Environment variables (set in server's environment or systemd `EnvironmentFile=`
 - `TELEGRAM_BOT_TOKEN` -- required
 - `TELEGRAM_ALLOWED_USERS` -- required, comma-separated Telegram user IDs
 - `OPENCODE_WORKSPACE` -- optional, server working directory (used by Makefile at install time)
+- `TELEGRAM_AUTOCONNECT` -- optional, set to `1` to auto-start the Telegram bot on plugin load (systemd unit sets this)
 - `EXCHANGES_DIR` -- optional, exchange log directory (default `{directory}/exchanges`, where `directory` is the plugin context dir)
 
 ## Dev Flow
 
+- Any functional change to the code MUST include corresponding updates to AGENTS.md and README.md (env vars, commands, architecture, key details, etc.)
 - `make check` -- run lint + typecheck (always run before committing)
 - `make lint` -- eslint
 - `make typecheck` -- tsc --noEmit

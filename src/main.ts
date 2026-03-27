@@ -2,21 +2,10 @@ import type { Plugin } from "@opencode-ai/plugin";
 import { tool } from "@opencode-ai/plugin";
 import type { Bot } from "grammy";
 import * as log from "./log.js";
-import { init } from "./opencode.js";
+import { init, setAttachedSession, clearAttachedSession } from "./opencode.js";
 import { handleEvent } from "./events.js";
-import { createBot } from "./telegram.js";
+import { BOT_COMMANDS, createBot } from "./telegram.js";
 import { initExchangesDir } from "./memory.js";
-
-const BOT_COMMANDS = [
-  { command: "new", description: "New session" },
-  { command: "sessions", description: "List and switch sessions" },
-  { command: "abort", description: "Abort current session" },
-  { command: "history", description: "Recent messages from current session" },
-  { command: "agent", description: "Switch agent (/agent <name>)" },
-  { command: "remember", description: "Save a memory (/remember <text>)" },
-  { command: "start_llama", description: "Start llama service" },
-  { command: "stop_llama", description: "Stop llama service" },
-];
 
 export const ClawCode: Plugin = async ({ client, directory }) => {
   const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -51,6 +40,7 @@ export const ClawCode: Plugin = async ({ client, directory }) => {
     if (!bot) return "not connected";
     await bot.stop();
     bot = null;
+    clearAttachedSession();
     log.info("telegram bot stopped");
     return "disconnected";
   }
@@ -74,8 +64,11 @@ export const ClawCode: Plugin = async ({ client, directory }) => {
         args: {
           action: tool.schema.enum(["connect", "disconnect", "status"]),
         },
-        async execute(args) {
-          if (args.action === "connect") return connect();
+        async execute(args, context) {
+          if (args.action === "connect") {
+            setAttachedSession(context.sessionID);
+            return connect();
+          }
           if (args.action === "disconnect") return disconnect();
           return bot ? "connected" : "disconnected";
         },

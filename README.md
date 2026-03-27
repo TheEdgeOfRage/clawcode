@@ -26,7 +26,7 @@ mkdir -p /path/to/workspace/.opencode/plugins
 ln -s /path/to/clawcode/src/main.ts /path/to/workspace/.opencode/plugins/clawcode.ts
 ```
 
-Or use the Makefile to install the systemd service and skills:
+Or use the Makefile to install the systemd service, plugin, and `.opencode/` assets:
 
 ```bash
 make install
@@ -34,6 +34,8 @@ systemctl --user enable --now opencode-server.service
 ```
 
 Set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_ALLOWED_USERS` in the server's environment (e.g., `EnvironmentFile=` in the systemd unit).
+
+The Telegram bot is **on-demand** by default. Use `/telegram connect` in the OpenCode TUI to start it. The systemd unit sets `TELEGRAM_AUTOCONNECT=1` to auto-start.
 
 To remove:
 
@@ -45,11 +47,11 @@ make uninstall
 
 | Command | Description |
 |---|---|
-| `/start` | Welcome message |
 | `/new` | New session |
 | `/sessions` | List and switch sessions |
 | `/abort` | Abort current session |
 | `/history` | Recent messages from current session |
+| `/agent <name>` | Switch agent (omit name to list available) |
 | `/remember <text>` | Save a memory to MEMORY.md via OpenCode |
 | `/start_llama` | Start llama systemd service |
 | `/stop_llama` | Stop llama systemd service |
@@ -73,4 +75,4 @@ qmd collection add /path/to/exchanges --name exchanges --mask "**/*.md"
 qmd embed
 ```
 
-Run `qmd embed` periodically (or via cron) to index new exchanges.
+New exchanges are automatically indexed via `qmd update && qmd embed` after each save (if `qmd` is installed).

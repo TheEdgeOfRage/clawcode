@@ -10,6 +10,17 @@ let sessionsFile: string;
 const chatSessions = new Map<number, string>();
 const chatAgents = new Map<number, string>();
 
+// When set, all Telegram messages route to this session (interactive mode).
+let attachedSession: string | null = null;
+
+export function setAttachedSession(sessionId: string): void {
+  attachedSession = sessionId;
+}
+
+export function clearAttachedSession(): void {
+  attachedSession = null;
+}
+
 export function init(c: Client, directory: string): void {
   client = c;
   sessionsFile = resolve(directory, ".opencode", "sessions.json");
@@ -35,12 +46,14 @@ function saveSessions(): void {
 export async function getOrCreateSession(
   chatId: number,
 ): Promise<{ sessionId: string; fallback: boolean }> {
-  const existing = chatSessions.get(chatId);
-  if (existing) {
+  const target = attachedSession ?? chatSessions.get(chatId);
+  if (target) {
     const list = await client.session.list();
-    if (!list.error && list.data?.some((s) => s.id === existing)) {
-      return { sessionId: existing, fallback: false };
+    if (!list.error && list.data?.some((s) => s.id === target)) {
+      return { sessionId: target, fallback: false };
     }
+    // Attached session gone — clear and fall through
+    if (attachedSession) attachedSession = null;
   }
 
   const result = await client.session.create();
@@ -49,7 +62,7 @@ export async function getOrCreateSession(
   const sessionId = result.data.id;
   chatSessions.set(chatId, sessionId);
   saveSessions();
-  return { sessionId, fallback: existing !== undefined };
+  return { sessionId, fallback: target !== undefined };
 }
 
 export async function listAgents(): Promise<string[]> {

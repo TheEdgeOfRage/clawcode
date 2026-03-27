@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { Bot, InlineKeyboard, type Context } from "grammy";
+import type { Chat } from "grammy/types";
 import type { Part } from "@opencode-ai/sdk";
 import * as log from "./log.js";
 import type { PermissionEvent } from "./events.js";
@@ -32,7 +33,21 @@ export const BOT_COMMANDS = [
   { command: "stop_llama", description: "Stop llama service" },
 ];
 
+function isChannel(chat: Chat): boolean {
+  return chat.type === "channel" || chat.type === "supergroup";
+}
+
+function formatAsQuote(text: string): string {
+  const escaped = escapeMarkdownV2(text);
+  const lines = escaped.split("\n");
+  const quoted = lines.map((line) => `> ${line}`).join("\n");
+  return quoted;
+}
+
 const THROTTLE_MS = 2000;
+
+// Track channel membership for quoting
+let channelChatId: number | null = null;
 
 // Telegram callback data is limited to 64 bytes. Permission IDs are too long,
 // so we store them in a map keyed by a short incrementing counter.
@@ -69,6 +84,14 @@ function formatPermissionMessage(perm: PermissionEvent): string {
   return lines.join("\n");
 }
 
+function trackChannel(ctx: Context): void {
+  const chat = ctx.chat;
+  if (!chat) return;
+  if (isChannel(chat)) {
+    channelChatId = chat.id;
+  }
+}
+
 export function createBot(token: string, allowedUsers: number[]): Bot {
   const bot = new Bot(token);
 
@@ -81,6 +104,7 @@ export function createBot(token: string, allowedUsers: number[]): Bot {
       await ctx.reply("Not authorized.");
       return;
     }
+    trackChannel(ctx);
     await next();
   });
 
@@ -325,12 +349,15 @@ export function createBot(token: string, allowedUsers: number[]): Bot {
         .then(async (parts) => {
           const chunks = splitMessage(formatTextParts(parts));
           for (const chunk of chunks) {
-            await ctx.api.sendMessage(chatId, chunk, { parse_mode: "MarkdownV2" });
+            const chunkToSend = channelChatId !== null ? formatAsQuote(chunk) : chunk;
+            await ctx.api.sendMessage(chatId, chunkToSend, { parse_mode: "MarkdownV2" });
           }
         })
         .catch(async (err) => {
           log.error(`[remember] error:`, err);
-          await ctx.reply(escapeMarkdownV2(`Error: ${String(err)}`), { parse_mode: "MarkdownV2" });
+          const errText = escapeMarkdownV2(`Error: ${String(err)}`);
+          const errTextToSend = channelChatId !== null ? formatAsQuote(errText) : errText;
+          await ctx.reply(errTextToSend, { parse_mode: "MarkdownV2" });
         });
     } catch (err) {
       log.error(`[cmd] /remember error:`, err);
@@ -373,7 +400,8 @@ export function createBot(token: string, allowedUsers: number[]): Bot {
 
       const flushEdit = () => {
         if (latestPreview && responseMsgId !== null) {
-          void editMessage(ctx, responseMsgId, latestPreview);
+          const textToSend = channelChatId !== null ? formatAsQuote(latestPreview) : latestPreview;
+          void editMessage(ctx, responseMsgId, textToSend);
           lastEditTime = Date.now();
         }
       };
@@ -387,7 +415,8 @@ export function createBot(token: string, allowedUsers: number[]): Bot {
           if (responseMsgId === null) {
             if (sendingFirst) return;
             sendingFirst = true;
-            void ctx.api.sendMessage(chatId, latestPreview, { parse_mode: "MarkdownV2" })
+            const textToSend = channelChatId !== null ? formatAsQuote(latestPreview) : latestPreview;
+            void ctx.api.sendMessage(chatId, textToSend, { parse_mode: "MarkdownV2" })
               .then((msg) => { responseMsgId = msg.message_id; lastEditTime = Date.now(); })
               .catch((err) => log.error(`[prompt] failed to send first message:`, err));
             return;
@@ -430,7 +459,8 @@ export function createBot(token: string, allowedUsers: number[]): Bot {
             const chunks = splitMessage(textContent);
             log.info(`[prompt] done session=${sessionId} chunks=${chunks.length}`);
             for (const chunk of chunks) {
-              await ctx.api.sendMessage(chatId, chunk, { parse_mode: "MarkdownV2" });
+              const textToSend = channelChatId !== null ? formatAsQuote(chunk) : chunk;
+              await ctx.api.sendMessage(chatId, textToSend, { parse_mode: "MarkdownV2" });
             }
           }
           // Save exchange to disk for qmd indexing
@@ -444,10 +474,11 @@ export function createBot(token: string, allowedUsers: number[]): Bot {
           cleanup();
           log.error(`[prompt] error session=${sessionId}:`, err);
           const errText = escapeMarkdownV2(`Error: ${String(err)}`);
+          const errTextQuoted = channelChatId !== null ? formatAsQuote(errText) : errText;
           if (responseMsgId !== null) {
-            await editMessage(ctx, responseMsgId, errText);
+            await editMessage(ctx, responseMsgId, errTextQuoted);
           } else {
-            await ctx.api.sendMessage(chatId, errText, { parse_mode: "MarkdownV2" });
+            await ctx.api.sendMessage(chatId, errTextQuoted, { parse_mode: "MarkdownV2" });
           }
         });
     } catch (err) {

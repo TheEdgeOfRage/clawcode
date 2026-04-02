@@ -39,8 +39,14 @@ function escapeWithCodeBlocks(text: string): string {
   return parts.join("");
 }
 
+/** Escape text for use inside a MarkdownV2 code block (only ` and \ need escaping). */
+function escapeCodeContent(text: string): string {
+  return text.replace(/\\/g, "\\\\").replace(/`/g, "\\`");
+}
+
 function formatToolPart(part: Extract<Part, { type: "tool" }>): string {
-  const input = part.state.input;
+  const { state } = part;
+  const input = state.input;
   const target =
     (input["path"] as string | undefined) ??
     (input["filePath"] as string | undefined) ??
@@ -48,7 +54,17 @@ function formatToolPart(part: Extract<Part, { type: "tool" }>): string {
     (input["command"] as string | undefined) ??
     "";
   const suffix = target ? ` (${target})` : "";
-  return "```\nTool: " + part.tool + suffix + "\n```";
+  const header = "Tool: " + part.tool + suffix;
+
+  if (state.status === "completed" && state.output) {
+    let output = state.output;
+    if (output.length > 3000) output = output.slice(0, 3000) + "\n... (truncated)";
+    return "```\n" + escapeCodeContent(header + "\n" + output) + "\n```";
+  }
+  if (state.status === "error") {
+    return "```\n" + escapeCodeContent(header + "\nError: " + state.error) + "\n```";
+  }
+  return "```\n" + escapeCodeContent(header) + "\n```";
 }
 
 /** Format only text parts (no tool summaries) */

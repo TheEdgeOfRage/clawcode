@@ -55,10 +55,20 @@ src/
 
 ## Config
 
-Environment variables (set in server's environment or systemd `EnvironmentFile=`):
+Config file `~/.config/opencode/clawcode.json`:
 
-- `TELEGRAM_BOT_TOKEN` -- required
-- `TELEGRAM_ALLOWED_USERS` -- required, comma-separated Telegram user IDs
+```json
+{
+  "token": "bot-token-here",
+  "allowedUsers": [123456789]
+}
+```
+
+- `token` -- required, Telegram bot API token
+- `allowedUsers` -- required, array of allowed Telegram user IDs
+
+Environment variables:
+
 - `OPENCODE_WORKSPACE` -- optional, server working directory (used by Makefile at install time)
 - `TELEGRAM_AUTOCONNECT` -- optional, set to `1` to auto-start the Telegram bot on plugin load (systemd unit sets this)
 - `EXCHANGES_DIR` -- optional, exchange log directory (default `{directory}/exchanges`, where `directory` is the plugin context dir)

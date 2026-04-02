@@ -13,8 +13,15 @@ Telegram interface for [OpenCode](https://opencode.ai), implemented as an OpenCo
 
 ```bash
 bun install
-cp .env.example .env
-# Edit .env with your bot token and allowed user IDs
+```
+
+Create `~/.config/opencode/clawcode.json`:
+
+```json
+{
+  "token": "your-bot-token",
+  "allowedUsers": [123456789]
+}
 ```
 
 ## Install
@@ -32,8 +39,6 @@ Or use the Makefile to install the systemd service, plugin, and `.opencode/` ass
 make install
 systemctl --user enable --now opencode-server.service
 ```
-
-Set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_ALLOWED_USERS` in the server's environment (e.g., `EnvironmentFile=` in the systemd unit).
 
 The Telegram bot is **on-demand** by default. Use `/telegram connect` in the OpenCode TUI to start it. The systemd unit sets `TELEGRAM_AUTOCONNECT=1` to auto-start.
 

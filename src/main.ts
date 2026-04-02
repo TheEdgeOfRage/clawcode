@@ -1,25 +1,42 @@
 import type { Plugin } from "@opencode-ai/plugin";
 import { tool } from "@opencode-ai/plugin";
 import type { Bot } from "grammy";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { homedir } from "node:os";
 import * as log from "./log.js";
 import { init, setAttachedSession, clearAttachedSession } from "./opencode.js";
 import { handleEvent } from "./events.js";
 import { BOT_COMMANDS, createBot } from "./telegram.js";
 import { initExchangesDir } from "./memory.js";
 
-export const ClawCode: Plugin = async ({ client, directory }) => {
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  if (!token) throw new Error("TELEGRAM_BOT_TOKEN is required");
+interface Config {
+  token: string;
+  allowedUsers: number[];
+}
 
-  const allowedUsers = (process.env.TELEGRAM_ALLOWED_USERS ?? "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .map(Number);
-
-  if (allowedUsers.length === 0) {
-    throw new Error("TELEGRAM_ALLOWED_USERS must contain at least one user ID");
+function loadConfig(): Config {
+  const configPath = join(homedir(), ".config", "opencode", "clawcode.json");
+  let raw: string;
+  try {
+    raw = readFileSync(configPath, "utf-8");
+  } catch {
+    throw new Error(`cannot read config: ${configPath}`);
   }
+  const json = JSON.parse(raw) as Record<string, unknown>;
+  const token = json.token;
+  if (typeof token !== "string" || !token) {
+    throw new Error(`"token" missing in ${configPath}`);
+  }
+  const users = json.allowedUsers;
+  if (!Array.isArray(users) || users.length === 0) {
+    throw new Error(`"allowedUsers" must be a non-empty array in ${configPath}`);
+  }
+  return { token, allowedUsers: users.map(Number) };
+}
+
+export const ClawCode: Plugin = async ({ client, directory }) => {
+  const { token, allowedUsers } = loadConfig();
 
   init(client, directory);
   initExchangesDir(directory);

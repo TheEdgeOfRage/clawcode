@@ -13,7 +13,7 @@ usage() {
 }
 
 do_install() {
-	cp -r .opencode/. "$OPENCODE_WORKSPACE/.opencode/"
+	cp -r opencode/. "$OPENCODE_WORKSPACE/.opencode/"
 
 	mkdir -p "$OPENCODE_WORKSPACE/.opencode/plugins"
 	ln -sf "$PWD/src/main.ts" "$OPENCODE_WORKSPACE/.opencode/plugins/clawcode.ts"

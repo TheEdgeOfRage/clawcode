@@ -1,13 +1,20 @@
 import { spawn, execSync } from "child_process";
 import { existsSync, mkdirSync, writeFileSync } from "fs";
 import { resolve, join } from "path";
+import { homedir } from "os";
 import * as log from "./log.js";
 
 let exchangesDir: string;
 let indexing = false;
 
-export function initExchangesDir(directory: string): void {
-  exchangesDir = resolve(process.env.EXCHANGES_DIR || join(directory, "exchanges"));
+const DEFAULT_EXCHANGES_DIR = join(
+  process.env.XDG_DATA_HOME || join(homedir(), ".local", "share"),
+  "opencode",
+  "exchanges",
+);
+
+export function initExchangesDir(override?: string): void {
+  exchangesDir = resolve(override || DEFAULT_EXCHANGES_DIR);
   if (!existsSync(exchangesDir)) {
     mkdirSync(exchangesDir, { recursive: true });
     log.info(`[memory] created exchanges dir: ${exchangesDir}`);

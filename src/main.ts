@@ -1,95 +1,86 @@
 import type { Plugin } from "@opencode-ai/plugin";
-import { tool } from "@opencode-ai/plugin";
-import type { Bot } from "grammy";
+import type { createOpencodeClient, Part } from "@opencode-ai/sdk";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import * as log from "./log.js";
-import { init, setAttachedSession, clearAttachedSession } from "./opencode.js";
-import { handleEvent } from "./events.js";
-import { BOT_COMMANDS, createBot } from "./telegram.js";
-import { initExchangesDir } from "./memory.js";
+import { initExchangesDir, saveExchange } from "./memory.js";
 
 interface Config {
-  token: string;
-  allowedUsers: number[];
+  exchangesDir?: string;
 }
 
 function loadConfig(): Config {
   const configPath = join(homedir(), ".config", "opencode", "clawcode.json");
-  let raw: string;
   try {
-    raw = readFileSync(configPath, "utf-8");
+    const raw = readFileSync(configPath, "utf-8");
+    const json = JSON.parse(raw) as Record<string, unknown>;
+    const exchangesDir =
+      typeof json.exchangesDir === "string" ? json.exchangesDir : undefined;
+    return { exchangesDir };
   } catch {
-    throw new Error(`cannot read config: ${configPath}`);
+    return {};
   }
-  const json = JSON.parse(raw) as Record<string, unknown>;
-  const token = json.token;
-  if (typeof token !== "string" || !token) {
-    throw new Error(`"token" missing in ${configPath}`);
-  }
-  const users = json.allowedUsers;
-  if (!Array.isArray(users) || users.length === 0) {
-    throw new Error(`"allowedUsers" must be a non-empty array in ${configPath}`);
-  }
-  return { token, allowedUsers: users.map(Number) };
 }
 
-export const ClawCode: Plugin = async ({ client, directory }) => {
-  const { token, allowedUsers } = loadConfig();
+type Client = ReturnType<typeof createOpencodeClient>;
 
-  init(client, directory);
-  initExchangesDir(directory);
+function extractText(parts: Part[]): string {
+  return parts
+    .filter((p): p is Part & { type: "text" } => p.type === "text")
+    .map((p) => (p as unknown as { text: string }).text)
+    .join("\n");
+}
 
-  let bot: Bot | null = null;
-  const autoConnect = process.env.TELEGRAM_AUTOCONNECT === "1";
+async function saveLatestExchange(
+  client: Client,
+  sessionId: string,
+  saved: Set<string>,
+): Promise<void> {
+  const result = await client.session.messages({
+    path: { id: sessionId },
+    query: { limit: 2 },
+  });
+  if (result.error || !result.data) return;
 
-  async function connect(): Promise<string> {
-    if (bot) return "already connected";
-    bot = createBot(token!, allowedUsers);
-    await bot.api.setMyCommands(BOT_COMMANDS);
-    log.info("telegram bot starting long-polling...");
-    bot.start();
-    return "connected";
+  let userText = "";
+  let assistantText = "";
+  let assistantId = "";
+
+  for (const m of result.data) {
+    if (m.info.role === "user") {
+      userText = extractText(m.parts);
+    } else if (m.info.role === "assistant") {
+      assistantId = m.info.id;
+      assistantText = extractText(m.parts);
+    }
   }
 
-  async function disconnect(): Promise<string> {
-    if (!bot) return "not connected";
-    await bot.stop();
-    bot = null;
-    clearAttachedSession();
-    log.info("telegram bot stopped");
-    return "disconnected";
-  }
+  if (!assistantId || saved.has(assistantId)) return;
+  if (!userText && !assistantText) return;
 
-  if (autoConnect) {
-    connect().catch((err) => log.error("autoconnect failed:", err));
-  }
+  saved.add(assistantId);
+  saveExchange(userText, assistantText);
+}
+
+export const ClawCode: Plugin = async ({ client }) => {
+  const config = loadConfig();
+  initExchangesDir(config.exchangesDir);
+
+  const saved = new Set<string>();
 
   return {
     event: async ({ event }) => {
+      const type = event.type as string;
+      if (type !== "session.idle") return;
+      const sessionId = (
+        event.properties as unknown as { sessionID: string }
+      ).sessionID;
       try {
-        handleEvent(event);
+        await saveLatestExchange(client, sessionId, saved);
       } catch (err) {
-        log.error("event handler error:", err);
+        log.error("[exchange] save failed:", err);
       }
-    },
-    tool: {
-      telegram: tool({
-        description:
-          "Connect or disconnect the Telegram bot. Actions: connect, disconnect, status.",
-        args: {
-          action: tool.schema.enum(["connect", "disconnect", "status"]),
-        },
-        async execute(args, context) {
-          if (args.action === "connect") {
-            setAttachedSession(context.sessionID);
-            return connect();
-          }
-          if (args.action === "disconnect") return disconnect();
-          return bot ? "connected" : "disconnected";
-        },
-      }),
     },
   };
 };

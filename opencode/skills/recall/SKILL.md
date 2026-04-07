@@ -25,7 +25,7 @@ qmd embed
    - For broad recall: `qmd query 'question text' --collections exchanges` (auto-expand)
 3. Review the results and extract the relevant context.
 4. Present a concise summary of what was found, with key details from the past exchanges.
-5. If `qmd` is not available or the collection doesn't exist, fall back to grep. Find the exchanges directory by running `qmd collection list` or checking the `EXCHANGES_DIR` environment variable. Do NOT assume exchanges are in the skill's own directory — they are stored separately by the Telegram bridge plugin.
+5. If `qmd` is not available or the collection doesn't exist, fall back to grep. Find the exchanges directory by running `qmd collection list` or checking `exchangesDir` in `~/.config/opencode/clawcode.json`. Do NOT assume exchanges are in the skill's own directory — they are stored separately by the Telegram bridge plugin.
 
 ## Query Examples
 
@@ -41,6 +41,6 @@ qmd multi-get "exchanges/2026-03-*.md" -l 20
 
 # Find the exchanges directory for grep fallback
 qmd collection list | grep exchanges
-# or
-echo $EXCHANGES_DIR
+# or check exchangesDir in config
+cat ~/.config/opencode/clawcode.json | jq -r '.exchangesDir // empty'
 ```

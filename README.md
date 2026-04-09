@@ -1,13 +1,12 @@
-# CodeClaw
+# ClawCode
 
-Telegram interface for [OpenCode](https://opencode.ai), implemented as an OpenCode plugin.
+OpenCode plugin for exchange logging and workspace configuration (skills, agents, commands, tools).
 
 ## Prerequisites
 
 - [OpenCode](https://opencode.ai) installed
 - [Bun](https://bun.sh)
-- Telegram bot token from [@BotFather](https://t.me/BotFather)
-- Your Telegram user ID from [@userinfobot](https://t.me/userinfobot)
+- [qmd](https://github.com/qmd-project/qmd)
 
 ## Setup
 
@@ -15,69 +14,37 @@ Telegram interface for [OpenCode](https://opencode.ai), implemented as an OpenCo
 bun install
 ```
 
-Create `~/.config/opencode/clawcode.json`:
+Optionally create `~/.config/opencode/clawcode.json` to override the exchanges directory:
 
 ```json
 {
-  "token": "your-bot-token",
-  "allowedUsers": [123456789]
+  "exchangesDir": "/custom/path/to/exchanges"
 }
 ```
 
+Default: `$XDG_DATA_HOME/opencode/exchanges` (falls back to `~/.local/share/opencode/exchanges`).
+
 ## Install
 
-Symlink the plugin into your OpenCode workspace:
-
 ```bash
-mkdir -p /path/to/workspace/.opencode/plugins
-ln -s /path/to/clawcode/src/main.ts /path/to/workspace/.opencode/plugins/clawcode.ts
-```
-
-Or use the Makefile to install the systemd service, plugin, and `.opencode/` assets:
-
-```bash
-make install
+./install.sh install
 systemctl --user enable --now opencode-server.service
 ```
 
-The Telegram bot is **on-demand** by default. Use `/telegram connect` in the OpenCode TUI to start it. The systemd unit sets `TELEGRAM_AUTOCONNECT=1` to auto-start.
+This copies skills, agents, tools, and commands to `$OPENCODE_WORKSPACE/.opencode/`, symlinks the plugin, and installs the systemd service.
 
 To remove:
 
 ```bash
-make uninstall
+./install.sh uninstall
 ```
 
-## Bot Commands
+## Exchange Logging
 
-| Command | Description |
-|---|---|
-| `/new` | New session |
-| `/sessions` | List and switch sessions |
-| `/abort` | Abort current session |
-| `/history` | Recent messages from current session |
-| `/agent <name>` | Switch agent (omit name to list available) |
-| `/remember <text>` | Save a memory to MEMORY.md via OpenCode |
-| `/start_llama` | Start llama systemd service |
-| `/stop_llama` | Stop llama systemd service |
+Every completed session exchange is automatically saved as qmd-compatible markdown to the exchanges directory. The plugin listens for `session.idle` events and captures the last user/assistant message pair.
 
-Send any text message to prompt OpenCode. Responses stream in real-time.
-Permission requests appear as inline keyboards.
+The install script sets up a qmd collection for semantic search. New exchanges are automatically indexed after each save.
 
-## Memory System
+## Telegram Bridge
 
-Every exchange is automatically saved to `exchanges/` as qmd-compatible markdown.
-
-- `/remember <text>` — tells OpenCode to append a memory to `MEMORY.md` in the workspace (always read on startup)
-- The `recall` skill lets the model search past exchanges via qmd on demand
-
-### qmd Setup
-
-After first run, create a qmd collection for the exchanges:
-
-```bash
-qmd collection add /path/to/exchanges --name exchanges --mask "**/*.md"
-qmd embed
-```
-
-New exchanges are automatically indexed via `qmd update && qmd embed` after each save (if `qmd` is installed).
+For Telegram integration, see [opencode-telegram](https://github.com/TheEdgeOfRage/opencode-telegram).

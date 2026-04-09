@@ -18,6 +18,12 @@ do_install() {
 	mkdir -p "$OPENCODE_WORKSPACE/.opencode/plugins"
 	ln -sf "$PWD/src/main.ts" "$OPENCODE_WORKSPACE/.opencode/plugins/clawcode.ts"
 
+	command -v qmd &>/dev/null || { echo "qmd is required but not installed" >&2; exit 1; }
+	EXCHANGES_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/opencode/exchanges"
+	mkdir -p "$EXCHANGES_DIR"
+	qmd collection add "$EXCHANGES_DIR" --name exchanges --mask "**/*.md" 2>/dev/null || true
+	qmd embed
+
 	mkdir -p "$SYSTEMD_DIR"
 	sed "s|{{WORKDIR}}|$OPENCODE_WORKSPACE|g" "$SERVICE" > "$SYSTEMD_DIR/$SERVICE"
 	systemctl --user daemon-reload
